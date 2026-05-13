@@ -49,6 +49,75 @@ def test_curve_getter_handles_missing_state():
     assert svc.Curve == []
 
 
+def test_authorizer_receives_nonempty_sender(session_bus):
+    import sys, textwrap, json
+    log_path = session_bus  # reuse tmp dir context via env var below
+    code = textwrap.dedent(f"""
+        import sys, os
+        sys.path.insert(0, {repr(os.path.join(os.path.dirname(__file__), '..', 'src'))})
+        from dasbus.connection import SessionMessageBus
+        from dasbus.loop import EventLoop
+        from tpfan_daemon.ipc.dbus_service import TpfanService, BUS_NAME, OBJECT_PATH
+
+        captured = {{"sender": None, "action": None}}
+        def authorizer(sender, action):
+            captured["sender"] = sender
+            captured["action"] = action
+            # write to stderr for parent to observe
+            import sys
+            sys.stderr.write(f"AUTHZ {{sender}} {{action}}\\n")
+            sys.stderr.flush()
+
+        svc = TpfanService(
+            state_getter=lambda: {{}},
+            command_handler=lambda *a, **k: None,
+            authorizer=authorizer,
+        )
+        bus = SessionMessageBus()
+        bus.publish_object(OBJECT_PATH, svc)
+        bus.register_service(BUS_NAME)
+        print("READY", flush=True)
+        EventLoop().run()
+    """)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env={**os.environ},
+    )
+    try:
+        line = proc.stdout.readline()
+        assert b"READY" in line, f"server failed: {line!r} stderr={proc.stderr.read()!r}"
+        from dasbus.connection import SessionMessageBus
+        from tpfan_daemon.ipc.dbus_service import BUS_NAME, OBJECT_PATH
+        client_bus = SessionMessageBus()
+        proxy = client_bus.get_proxy(BUS_NAME, OBJECT_PATH)
+        proxy.SetMode("auto")
+        # give server a moment to write
+        time.sleep(0.3)
+        proc.send_signal(signal.SIGTERM)
+        try:
+            _, err = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            _, err = proc.communicate(timeout=5)
+        text = err.decode(errors="replace")
+        # sender must be a non-empty bus name (":x.y")
+        assert "AUTHZ" in text, f"authorizer not called: {text!r}"
+        line = [ln for ln in text.splitlines() if ln.startswith("AUTHZ")][0]
+        parts = line.split()
+        assert len(parts) >= 3
+        sender = parts[1]
+        assert sender.startswith(":"), f"expected non-empty unique bus name, got {sender!r}"
+        assert parts[2] == "org.tpfan1.set-mode"
+    finally:
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGTERM)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
 def test_service_exposes_properties_and_methods(session_bus):
     import sys, textwrap
     code = textwrap.dedent(f"""
