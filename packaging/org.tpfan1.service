@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.tpfan1
+Exec=/usr/local/bin/tpfan-daemon
+User=root
+SystemdService=tpfan-daemon.service

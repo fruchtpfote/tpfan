@@ -1,0 +1,15 @@
+[Unit]
+Description=tpfan — ThinkPad Fan Control Daemon
+After=systemd-modules-load.service
+
+[Service]
+Type=dbus
+BusName=org.tpfan1
+ExecStart=/usr/local/bin/tpfan-daemon
+WatchdogSec=10
+Restart=on-failure
+NotifyAccess=main
+Environment=TPFAN_LOG=info
+
+[Install]
+WantedBy=multi-user.target

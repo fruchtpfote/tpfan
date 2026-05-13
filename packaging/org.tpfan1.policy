@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>tpfan</vendor>
+
+  <action id="org.tpfan1.set-mode">
+    <description>Lüfter-Modus ändern</description>
+    <message>Authentifizierung erforderlich, um den Lüfter-Modus zu ändern.</message>
+    <defaults>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.tpfan1.set-curve">
+    <description>Lüfter-Kurve ändern</description>
+    <message>Authentifizierung erforderlich, um die Lüfter-Kurve zu ändern.</message>
+    <defaults><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+
+  <action id="org.tpfan1.set-manual-level">
+    <description>Manuelles Lüfter-Level setzen</description>
+    <defaults><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+
+  <action id="org.tpfan1.set-failsafe-temp">
+    <description>Failsafe-Temperatur ändern</description>
+    <defaults><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+
+  <action id="org.tpfan1.reload-config">
+    <description>Konfiguration neu laden</description>
+    <defaults><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+</policyconfig>

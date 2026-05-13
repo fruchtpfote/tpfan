@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=tpfan
+Comment=ThinkPad Lüfter-Steuerung
+Exec=tpfan-gui
+Icon=fan
+Categories=System;Settings;
+Terminal=false
