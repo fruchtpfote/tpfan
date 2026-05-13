@@ -42,4 +42,5 @@ uninstall:
 	systemctl daemon-reload
 
 clean:
-	rm -rf $(VENV) .pytest_cache **/*.egg-info
+	rm -rf $(VENV) .pytest_cache
+	find . -name '*.egg-info' -type d -exec rm -rf {} +
