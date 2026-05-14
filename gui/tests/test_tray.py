@@ -30,6 +30,19 @@ def test_apply_mode_marks_radio_and_enables_level(qtbot):
     assert t._level_menu.isEnabled() is False
 
 
+def test_tray_status_header_shows_preset_or_manual(qtbot):
+    from tpfan_gui.views.curve_editor import PRESETS
+    t = TrayController()
+    name, pts = PRESETS[1]  # Ruhig
+    t.apply_curve(pts)
+    t.apply_mode("curve")
+    assert name in t._status_action.text()
+    t.apply_curve([(40.0, 0), (80.0, 7)])
+    assert "manuelle Kurve" in t._status_action.text()
+    t.apply_mode("auto")
+    assert t._status_action.text().endswith("auto")
+
+
 def test_apply_tick_updates_status(qtbot):
     t = TrayController()
     payload = TickPayload(

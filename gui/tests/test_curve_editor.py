@@ -90,6 +90,30 @@ def test_apply_preset_replaces_curve_without_emitting(qtbot):
     assert received == [expected]
 
 
+def test_match_preset_name_recognises_known_curve():
+    from tpfan_gui.views.curve_editor import PRESETS, match_preset_name
+    name, pts = PRESETS[2]  # Ausgewogen
+    assert match_preset_name(pts) == name
+
+
+def test_match_preset_name_returns_none_for_custom_curve():
+    from tpfan_gui.views.curve_editor import match_preset_name
+    assert match_preset_name([(40.0, 0), (80.0, 7)]) is None
+
+
+def test_format_mode_label_for_curve_with_preset():
+    from tpfan_gui.views.curve_editor import PRESETS, format_mode_label
+    name, pts = PRESETS[0]  # Sehr ruhig
+    assert format_mode_label("curve", pts) == f"curve · {name}"
+
+
+def test_format_mode_label_for_manual_curve_and_other_modes():
+    from tpfan_gui.views.curve_editor import format_mode_label
+    assert format_mode_label("curve", [(40.0, 0), (80.0, 7)]) == "curve · manuelle Kurve"
+    assert format_mode_label("auto") == "auto"
+    assert format_mode_label("profile:quiet") == "profile:quiet"
+
+
 def test_apply_button_triggers_on_change(qtbot):
     pytest.importorskip("pyqtgraph")
     from tpfan_gui.views.curve_editor import make_widget

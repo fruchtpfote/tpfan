@@ -6,6 +6,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .ipc.dbus_client import TickPayload
+from .views.curve_editor import format_mode_label
 
 
 LEVEL_COLOR_GRAY = QColor(140, 140, 140)
@@ -58,6 +59,7 @@ class TrayController(QObject):
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
         self._mode: str = "auto"
+        self._curve_points: list = []
         self._last_payload: Optional[TickPayload] = None
 
         self.tray = QSystemTrayIcon(make_level_icon("auto"), parent)
@@ -112,7 +114,18 @@ class TrayController(QObject):
         for key, a in self._mode_actions.items():
             a.setChecked(key == mode)
         self._level_menu.setEnabled(mode == "manual")
+        self._refresh_status_header()
         self._refresh_tooltip()
+
+    def apply_curve(self, curve_points) -> None:
+        self._curve_points = list(curve_points or [])
+        self._refresh_status_header()
+        self._refresh_tooltip()
+
+    def _refresh_status_header(self) -> None:
+        self._status_action.setText(
+            f"Modus: {format_mode_label(self._mode, self._curve_points)}"
+        )
 
     def apply_tick(self, p: TickPayload) -> None:
         self._last_payload = p
@@ -135,15 +148,16 @@ class TrayController(QObject):
             self._status_action.setText("tpfan — Daemon nicht verbunden")
             self.tray.setIcon(make_level_icon("auto"))
         else:
-            self._status_action.setText("tpfan")
+            self._refresh_status_header()
             self._refresh_tooltip()
 
     def _refresh_tooltip(self) -> None:
+        mode_label = format_mode_label(self._mode, self._curve_points)
         p = self._last_payload
         if p is None:
-            self.tray.setToolTip(f"tpfan — Modus: {self._mode}")
+            self.tray.setToolTip(f"tpfan — Modus: {mode_label}")
             return
-        lines = [f"tpfan — Modus: {self._mode}"]
+        lines = [f"tpfan — Modus: {mode_label}"]
         if p.temps:
             name, val = max(p.temps.items(), key=lambda kv: kv[1])
             lines.append(f"Max: {name} {val:.1f} °C")

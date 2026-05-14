@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox,
                               QLabel, QTableWidget, QTableWidgetItem,
                               QPushButton, QHBoxLayout, QHeaderView)
 
+from .curve_editor import format_mode_label
+
 
 LEVEL_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "auto", "disengaged"]
 
@@ -122,7 +124,9 @@ class StatusView(QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        self._set_label(self.mode_lbl, self._get("Mode"))
+        mode = self._get("Mode")
+        curve = self._get("Curve") or []
+        self.mode_lbl.setText(format_mode_label(str(mode) if mode else "—", curve))
         self._set_label(self.level_lbl, self._get("CurrentLevel"))
         fs = self._get("FailsafeTemp")
         self.failsafe_lbl.setText(f"{float(fs):.1f} °C" if fs is not None else "—")
@@ -131,7 +135,7 @@ class StatusView(QWidget):
         sensors = self._get("CurveSensors") or []
         self.sensors_lbl.setText("Sensoren: " + (", ".join(sensors) if sensors else "—"))
 
-        rows = _fmt_curve(self._get("Curve") or [])
+        rows = _fmt_curve(curve)
         self.curve_table.setRowCount(len(rows))
         for i, (t, l) in enumerate(rows):
             it_t = QTableWidgetItem(t)

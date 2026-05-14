@@ -54,6 +54,40 @@ PRESETS: list[tuple[str, list[tuple[float, int]]]] = [
                      (60.0, 5), (65.0, 6), (70.0, 7)]),
 ]
 
+_PRESET_MATCH_EPS = 0.05
+
+
+def match_preset_name(points) -> str | None:
+    """Liefert den Preset-Namen, falls die Punkte exakt einem PRESET entsprechen.
+
+    Vergleicht Punktanzahl, Temperaturen (mit kleinem float-Spielraum) und
+    Levels. Gibt None zurück, wenn keine Vorlage passt → manuelle Kurve.
+    """
+    try:
+        pts = [(float(t), int(l)) for t, l in points]
+    except (TypeError, ValueError):
+        return None
+    for name, preset in PRESETS:
+        if len(preset) != len(pts):
+            continue
+        if all(abs(pt - rt) <= _PRESET_MATCH_EPS and pl == rl
+               for (pt, pl), (rt, rl) in zip(preset, pts)):
+            return name
+    return None
+
+
+def format_mode_label(mode: str, curve_points=None) -> str:
+    """Mensch-lesbarer Modus-String inkl. Kurvenherkunft.
+
+    'curve' wird mit '· Vorlage: <Name>' bzw. 'manuelle Kurve' ergänzt.
+    Profile/Auto/Manual werden unverändert weitergereicht.
+    """
+    if mode == "curve":
+        name = match_preset_name(curve_points or [])
+        suffix = name if name else "manuelle Kurve"
+        return f"curve · {suffix}"
+    return str(mode)
+
 
 def make_widget(model: CurveModel, on_change, parent=None):
     """on_change(points) wird gerufen, wenn der User Apply klickt."""

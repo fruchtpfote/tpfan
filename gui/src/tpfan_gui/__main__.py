@@ -42,22 +42,27 @@ def main() -> int:
     tray.openRequested.connect(lambda: _activate_window(win))
     tray.quitRequested.connect(app.quit)
 
-    def on_tick(payload):
-        tray.apply_tick(payload)
+    def _sync_mode_and_curve():
         mode = client.get("Mode")
         if mode:
             tray.apply_mode(str(mode))
+        try:
+            tray.apply_curve(client.get("Curve") or [])
+        except Exception:
+            tray.apply_curve([])
+
+    def on_tick(payload):
+        tray.apply_tick(payload)
+        _sync_mode_and_curve()
 
     def on_connected(ok: bool):
         tray.set_connected(ok)
         if ok:
-            mode = client.get("Mode")
-            if mode:
-                tray.apply_mode(str(mode))
+            _sync_mode_and_curve()
 
     def on_props(changed: dict):
-        if "Mode" in changed:
-            tray.apply_mode(str(changed["Mode"]))
+        if "Mode" in changed or "Curve" in changed:
+            _sync_mode_and_curve()
 
     client.tickReceived.connect(on_tick)
     client.connected.connect(on_connected)

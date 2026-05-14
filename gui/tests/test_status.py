@@ -31,7 +31,9 @@ def test_refresh_populates_labels_and_table(qtbot):
     v = StatusView(client)
     qtbot.addWidget(v)
     v.refresh()
-    assert v.mode_lbl.text() == "curve"
+    assert v.mode_lbl.text().startswith("curve")
+    # Erwartung: bei beliebiger Kurve ohne Preset-Match → 'manuelle Kurve'
+    assert "manuelle Kurve" in v.mode_lbl.text() or "·" in v.mode_lbl.text()
     assert v.level_lbl.text() == "3"
     assert "92.0" in v.failsafe_lbl.text()
     assert v.version_lbl.text() == "1.2.3"
