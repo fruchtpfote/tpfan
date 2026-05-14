@@ -117,6 +117,11 @@ enable_service() {
     if [[ $FAN_CONTROL_ACTIVE -eq 1 ]]; then
         log "aktiviere und starte tpfan-daemon.service"
         systemctl enable --now tpfan-daemon.service
+        # Pickt neuen Code/Service-Unit bei Re-Installs auf; auf der
+        # frischen Installation ist der Service gerade erst gestartet,
+        # try-restart ist dort idempotent.
+        log "lade tpfan-daemon neu, falls bereits aktiv"
+        systemctl try-restart tpfan-daemon.service || true
     else
         log "aktiviere tpfan-daemon.service (Start verschoben bis nach Reboot)"
         systemctl enable tpfan-daemon.service
