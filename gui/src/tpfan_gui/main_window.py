@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
         if self._t0 is None:
             self._t0 = t
         self.history.append(t - self._t0, payload.temps)
+        self.status.record_tick(payload)
         if self.tabs.currentWidget() is self.status:
             self.status.refresh()
 
