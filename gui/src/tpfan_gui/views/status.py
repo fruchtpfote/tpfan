@@ -95,7 +95,8 @@ class StatusView(QWidget):
         self.rpm_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.rpm_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self.rpm_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.rpm_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rpm_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.rpm_visible_rows = 5
         rl.addWidget(self.rpm_table)
         root.addWidget(gb_rpm)
 
@@ -116,6 +117,16 @@ class StatusView(QWidget):
             h += t.rowHeight(i)
         h += 2 * t.frameWidth()
         t.setFixedHeight(h)
+
+    def _autosize_rpm_table(self) -> None:
+        t = self.rpm_table
+        h = t.horizontalHeader().height() + 2 * t.frameWidth()
+        if t.rowCount() == 0:
+            t.setFixedHeight(h)
+            return
+        row_h = t.rowHeight(0)
+        rows = min(t.rowCount(), self.rpm_visible_rows)
+        t.setFixedHeight(h + rows * row_h)
 
     def _reset_rpm_stats(self) -> None:
         try:
@@ -164,7 +175,7 @@ class StatusView(QWidget):
                 item = QTableWidgetItem(val)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.rpm_table.setItem(i, j, item)
-        self._autosize_table(self.rpm_table)
+        self._autosize_rpm_table()
 
     def _get(self, name: str) -> Any:
         try:
