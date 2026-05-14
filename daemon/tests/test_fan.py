@@ -55,6 +55,31 @@ def test_set_level_retries_on_oserror(tmp_path: Path):
     assert calls["n"] == 3
 
 
+def test_writable_uses_access_not_append(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Regression: procfs rejects open(..., "a") with EINVAL even when writable.
+    # writable() must use os.access(W_OK) instead.
+    p = _write_fan(tmp_path, FAKE_PROC)
+
+    import builtins
+    real_open = builtins.open
+
+    def no_append(path, mode="r", *a, **kw):
+        if "a" in mode:
+            raise OSError(22, "Invalid argument")
+        return real_open(path, mode, *a, **kw)
+
+    monkeypatch.setattr(builtins, "open", no_append)
+    fan = Fan(path=p)
+    assert fan.writable() is True
+
+
+def test_writable_false_when_readonly(tmp_path: Path):
+    p = _write_fan(tmp_path, FAKE_PROC)
+    p.chmod(0o444)
+    fan = Fan(path=p)
+    assert fan.writable() is False
+
+
 def test_set_level_gives_up_after_three(tmp_path: Path):
     p = _write_fan(tmp_path, FAKE_PROC)
 

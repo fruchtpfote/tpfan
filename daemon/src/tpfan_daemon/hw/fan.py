@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+import os
 import time
 import logging
 
@@ -26,11 +27,7 @@ class Fan:
     retry_delay_s: float = 0.1
 
     def writable(self) -> bool:
-        try:
-            with self.path.open("a"):
-                return True
-        except OSError:
-            return False
+        return os.access(self.path, os.W_OK)
 
     def read(self) -> FanState:
         speed = 0
