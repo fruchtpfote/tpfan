@@ -32,26 +32,43 @@ class MainWindow(QMainWindow):
         client.emergency.connect(self._on_emergency)
         client.connected.connect(self._on_connected)
 
-        self.modes.modeRequested.connect(self._wrap(self.client.set_mode))
+        self.modes.modeRequested.connect(self._send_mode)
         self.modes.manualLevelRequested.connect(self._wrap(self.client.set_manual_level))
         self.modes.failsafeRequested.connect(self._wrap(self.client.set_failsafe_temp))
 
         self._t0 = None
+
+    @staticmethod
+    def _friendly_error(e: Exception) -> str:
+        msg = str(e)
+        low = msg.lower()
+        if "accessdenied" in low or "polkit" in low or "not authorized" in low:
+            return "Keine Berechtigung (polkit verweigert)"
+        if "not connected" in low or "daemonnotconnected" in low:
+            return "Daemon nicht verbunden"
+        return msg
 
     def _wrap(self, fn):
         def call(*args):
             try:
                 fn(*args)
             except Exception as e:
-                QMessageBox.warning(self, "tpfan", f"Fehler: {e}")
+                QMessageBox.warning(self, "tpfan", self._friendly_error(e))
         return call
+
+    def _send_mode(self, mode: str):
+        try:
+            self.client.set_mode(mode)
+            self.modes.set_mode_state(mode)
+        except Exception as e:
+            QMessageBox.warning(self, "tpfan", self._friendly_error(e))
 
     def _send_curve(self, points):
         sensors = ["CPU", "GPU", "NVMe"]
         try:
             self.client.set_curve(points, sensors)
         except Exception as e:
-            QMessageBox.warning(self, "tpfan", f"Kurve nicht übernommen: {e}")
+            QMessageBox.warning(self, "tpfan", self._friendly_error(e))
 
     def _on_tick(self, payload: TickPayload):
         self.dashboard.apply_tick(payload)
@@ -67,3 +84,5 @@ class MainWindow(QMainWindow):
 
     def _on_connected(self, ok: bool):
         self.statusBar().showMessage("Verbunden" if ok else "Daemon nicht erreichbar")
+        if ok:
+            self._t0 = None

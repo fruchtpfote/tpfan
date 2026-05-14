@@ -55,3 +55,14 @@ def test_add_rejects_too_close():
     m.add(60.0, 4)
     with pytest.raises(ValueError):
         m.add(60.3, 5)
+
+
+def test_apply_button_triggers_on_change(qtbot):
+    pytest.importorskip("pyqtgraph")
+    from tpfan_gui.views.curve_editor import make_widget
+    received: list = []
+    m = CurveModel(points=[(40.0, 0), (60.0, 4), (80.0, 7)])
+    w = make_widget(m, lambda pts: received.append(list(pts)))
+    qtbot.addWidget(w)
+    w.apply_btn.click()
+    assert received == [[(40.0, 0), (60.0, 4), (80.0, 7)]]
