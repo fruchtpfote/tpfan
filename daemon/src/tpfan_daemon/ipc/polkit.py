@@ -8,6 +8,7 @@ class PolkitError(Exception):
 def authorize(bus, sender: str, action: str) -> None:
     """Synchroner PolicyKit-CheckAuthorization. Fail-closed bei Bus-Fehlern."""
     try:
+        from gi.repository import GLib
         proxy = bus.get_proxy(
             "org.freedesktop.PolicyKit1",
             "/org/freedesktop/PolicyKit1/Authority",
@@ -15,7 +16,7 @@ def authorize(bus, sender: str, action: str) -> None:
         )
         subject = (
             "system-bus-name",
-            {"name": ("s", sender)},
+            {"name": GLib.Variant("s", sender)},
         )
         is_auth, _challenge, _details = proxy.CheckAuthorization(
             subject, action, {}, 1, ""
