@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sys
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .ipc.dbus_client import make_client
@@ -15,6 +16,9 @@ def _activate_window(win):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setApplicationName("tpfan")
+    app.setDesktopFileName("tpfan-gui")
+    app.setWindowIcon(QIcon.fromTheme("tpfan"))
     app.setQuitOnLastWindowClosed(False)
 
     client = make_client()

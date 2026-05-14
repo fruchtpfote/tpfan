@@ -3,6 +3,6 @@ Type=Application
 Name=tpfan
 Comment=ThinkPad Lüfter-Steuerung
 Exec=tpfan-gui
-Icon=fan
+Icon=tpfan
 Categories=System;Settings;
 Terminal=false

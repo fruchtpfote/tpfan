@@ -84,6 +84,10 @@ install_packaging() {
     install -D -m 0644 "$PACKAGING/org.tpfan1.policy"     /usr/share/polkit-1/actions/org.tpfan1.policy
     install -D -m 0644 "$PACKAGING/tpfan-modprobe.conf"   /etc/modprobe.d/tpfan.conf
     install -D -m 0644 "$PACKAGING/tpfan-gui.desktop"     /usr/share/applications/tpfan-gui.desktop
+    install -D -m 0644 "$PACKAGING/tpfan.svg"             /usr/share/icons/hicolor/scalable/apps/tpfan.svg
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache --quiet /usr/share/icons/hicolor 2>/dev/null || true
+    fi
     systemctl daemon-reload
 }
 
@@ -167,6 +171,10 @@ uninstall_packaging() {
     rm -f /usr/share/polkit-1/actions/org.tpfan1.policy
     rm -f /etc/modprobe.d/tpfan.conf
     rm -f /usr/share/applications/tpfan-gui.desktop
+    rm -f /usr/share/icons/hicolor/scalable/apps/tpfan.svg
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache --quiet /usr/share/icons/hicolor 2>/dev/null || true
+    fi
     systemctl daemon-reload
 }
 
