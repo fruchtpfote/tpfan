@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 import logging
 
-from .config import CurveCfg, DEFAULT, load, save, _validate_points, VALID_LEVELS
+from .config import CurveCfg, DEFAULT, load, save, _validate_points, VALID_LEVELS, validate_preset_name
 from .control.loop import ControlLoop
 
 log = logging.getLogger(__name__)
@@ -60,5 +60,26 @@ class Daemon:
             self._save()
         elif cmd == "reload_config":
             self.loop.set_config(load(self.config_path))
+        elif cmd == "save_user_preset":
+            name, points, sensors_ = args
+            validate_preset_name(name)
+            if not sensors_:
+                raise ValueError("save_user_preset requires at least one sensor")
+            pts = _validate_points([list(p) for p in points])
+            known = set(self.sensors.read_all().keys())
+            for s in sensors_:
+                if s not in known:
+                    raise ValueError(f"unknown sensor: {s}")
+            new_presets = {**self.loop.config.user_presets,
+                           name: CurveCfg(sensors=tuple(sensors_), points=pts)}
+            self.loop.set_config(replace(self.loop.config, user_presets=new_presets))
+            self._save()
+        elif cmd == "delete_user_preset":
+            name = args[0]
+            if name not in self.loop.config.user_presets:
+                raise ValueError(f"unknown preset: {name}")
+            new_presets = {k: v for k, v in self.loop.config.user_presets.items() if k != name}
+            self.loop.set_config(replace(self.loop.config, user_presets=new_presets))
+            self._save()
         else:
             raise ValueError(f"unknown command: {cmd}")
