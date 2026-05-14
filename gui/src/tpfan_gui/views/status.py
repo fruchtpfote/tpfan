@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox,
                               QPushButton, QHBoxLayout, QHeaderView)
 
 from .curve_editor import format_mode_label
+from .. import __version__ as GUI_VERSION
 
 
 LEVEL_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "auto", "disengaged"]
@@ -61,7 +62,7 @@ class StatusView(QWidget):
         form.addRow("Modus:", self.mode_lbl)
         form.addRow("Aktueller Level:", self.level_lbl)
         form.addRow("Failsafe-Schwelle:", self.failsafe_lbl)
-        form.addRow("Daemon-Version:", self.version_lbl)
+        form.addRow("Version:", self.version_lbl)
         root.addWidget(gb_general)
 
         gb_curve = QGroupBox("Aktive Kurve")
@@ -130,7 +131,13 @@ class StatusView(QWidget):
         self._set_label(self.level_lbl, self._get("CurrentLevel"))
         fs = self._get("FailsafeTemp")
         self.failsafe_lbl.setText(f"{float(fs):.1f} °C" if fs is not None else "—")
-        self._set_label(self.version_lbl, self._get("DaemonVersion"))
+        daemon_v = self._get("DaemonVersion")
+        if daemon_v and str(daemon_v) == GUI_VERSION:
+            self.version_lbl.setText(GUI_VERSION)
+        elif daemon_v:
+            self.version_lbl.setText(f"GUI {GUI_VERSION} / Daemon {daemon_v}")
+        else:
+            self.version_lbl.setText(f"GUI {GUI_VERSION} / Daemon —")
 
         sensors = self._get("CurveSensors") or []
         self.sensors_lbl.setText("Sensoren: " + (", ".join(sensors) if sensors else "—"))

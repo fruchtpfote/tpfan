@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tpfan-gui"
-version = "0.1.0"
+version = "0.2.0"
 description = "ThinkPad fan control GUI"
 requires-python = ">=3.11"
 dependencies = ["PyQt6>=6.6", "pyqtgraph>=0.13", "dasbus>=1.7"]

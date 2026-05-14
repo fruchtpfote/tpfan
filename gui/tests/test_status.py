@@ -36,7 +36,7 @@ def test_refresh_populates_labels_and_table(qtbot):
     assert "manuelle Kurve" in v.mode_lbl.text() or "·" in v.mode_lbl.text()
     assert v.level_lbl.text() == "3"
     assert "92.0" in v.failsafe_lbl.text()
-    assert v.version_lbl.text() == "1.2.3"
+    assert "1.2.3" in v.version_lbl.text()
     assert "CPU" in v.sensors_lbl.text() and "GPU" in v.sensors_lbl.text()
     assert v.curve_table.rowCount() == 3
     assert v.curve_table.item(1, 0).text() == "60.0 °C"

@@ -1,8 +1,12 @@
-.PHONY: dev test test-daemon test-gui install uninstall clean
+.PHONY: dev test test-daemon test-gui install uninstall clean dist
 
 VENV ?= .venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
+
+VERSION := $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' daemon/src/tpfan_daemon/__init__.py)
+DIST_DIR := dist
+TARBALL  := $(DIST_DIR)/tpfan-$(VERSION).tar.gz
 
 $(VENV)/bin/activate:
 	python3 -m venv $(VENV)
@@ -42,5 +46,24 @@ uninstall:
 	systemctl daemon-reload
 
 clean:
-	rm -rf $(VENV) .pytest_cache
+	rm -rf $(VENV) .pytest_cache $(DIST_DIR)
 	find . -name '*.egg-info' -type d -exec rm -rf {} +
+
+# Schnürt ein selbstständig installierbares Archiv mit allen Files,
+# die scripts/install.sh braucht. Name: tpfan-<VERSION>.tar.gz.
+dist:
+	@test -n "$(VERSION)" || (echo "konnte VERSION nicht ermitteln" >&2; exit 1)
+	@echo "packe Release-Archiv für Version $(VERSION)"
+	mkdir -p $(DIST_DIR)
+	tar --owner=0 --group=0 \
+	    --transform 's,^,tpfan-$(VERSION)/,' \
+	    --exclude='__pycache__' \
+	    --exclude='*.egg-info' \
+	    --exclude='.coverage' \
+	    --exclude='build' \
+	    --exclude='dist' \
+	    -czf $(TARBALL) \
+	    daemon/pyproject.toml daemon/src daemon/tests \
+	    gui/pyproject.toml gui/src gui/tests \
+	    packaging scripts Makefile README.md
+	@echo "Archiv: $(TARBALL)"
