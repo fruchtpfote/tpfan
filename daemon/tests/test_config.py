@@ -60,3 +60,41 @@ def test_atomic_write_does_not_leave_partial(tmp_path: Path, monkeypatch):
     with pytest.raises(RuntimeError):
         save(p, CurveCfg.from_default()._wrap_in_config(failsafe_temp=70.0))
     assert p.read_text() == original
+
+
+def test_user_presets_roundtrip(tmp_path: Path):
+    p = tmp_path / "c.toml"
+    cfg = Config(
+        user_presets={
+            "Mein Preset": CurveCfg(
+                sensors=("CPU", "GPU"),
+                points=((42.0, 0), (60.0, 2), (80.0, 7)),
+            ),
+            "Zweites": CurveCfg(
+                sensors=("CPU",),
+                points=((40.0, 0), (80.0, 7)),
+            ),
+        }
+    )
+    save(p, cfg)
+    loaded = load(p)
+    assert loaded.user_presets == cfg.user_presets
+
+
+def test_user_presets_validates_points(tmp_path: Path):
+    p = tmp_path / "c.toml"
+    p.write_text(
+        '''
+        mode = "curve"
+        manual_level = "3"
+        failsafe_temp = 95.0
+        [curve]
+        sensors = ["CPU"]
+        points = [[40, 0], [80, 7]]
+        [user_presets."Kaputt"]
+        sensors = ["CPU"]
+        points = [[70, 4], [55, 2]]
+        '''
+    )
+    with pytest.raises(ValueError, match="monotonic"):
+        load(p)
