@@ -44,6 +44,35 @@ def test_mode_request_propagates_state(qtbot):
     assert all(not b.isEnabled() for b in win.modes._manual_buttons)
 
 
+def test_send_curve_switches_to_curve_mode(qtbot):
+    from tpfan_gui.main_window import MainWindow
+    client = _FakeClient()
+    win = MainWindow(client)
+    qtbot.addWidget(win)
+
+    pts = [(40.0, 0), (60.0, 4), (80.0, 7)]
+    win._send_curve(pts)
+
+    assert client.curve_calls == [(pts, ["CPU", "GPU", "NVMe"])]
+    assert client.mode_calls == ["curve"]
+    assert all(not b.isEnabled() for b in win.modes._manual_buttons)
+
+
+def test_send_curve_does_not_switch_mode_if_set_curve_fails(qtbot):
+    from tpfan_gui.main_window import MainWindow
+    client = _FakeClient()
+
+    def boom(points, sensors):
+        raise RuntimeError("polkit denied")
+
+    client.set_curve = boom
+    win = MainWindow(client)
+    qtbot.addWidget(win)
+
+    win._send_curve([(40.0, 0), (80.0, 7)])
+    assert client.mode_calls == []
+
+
 def test_reconnect_resets_t0(qtbot):
     from tpfan_gui.main_window import MainWindow
     client = _FakeClient()

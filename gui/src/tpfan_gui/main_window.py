@@ -67,6 +67,8 @@ class MainWindow(QMainWindow):
         sensors = ["CPU", "GPU", "NVMe"]
         try:
             self.client.set_curve(points, sensors)
+            self.client.set_mode("curve")
+            self.modes.set_mode_state("curve")
         except Exception as e:
             QMessageBox.warning(self, "tpfan", self._friendly_error(e))
 
