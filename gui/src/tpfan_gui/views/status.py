@@ -89,6 +89,8 @@ class StatusView(QWidget):
         self.curve_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.curve_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.curve_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.curve_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.curve_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         cl.addWidget(self.curve_table)
         root.addWidget(gb_curve)
 
@@ -104,6 +106,8 @@ class StatusView(QWidget):
         self.rpm_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.rpm_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.rpm_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.rpm_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rpm_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         rl.addWidget(self.rpm_table)
         root.addWidget(gb_rpm)
 
@@ -117,7 +121,13 @@ class StatusView(QWidget):
         row.addWidget(self.refresh_btn)
         root.addLayout(row)
 
-        root.addStretch(1)
+    @staticmethod
+    def _autosize_table(t: QTableWidget) -> None:
+        h = t.horizontalHeader().height()
+        for i in range(t.rowCount()):
+            h += t.rowHeight(i)
+        h += 2 * t.frameWidth()
+        t.setFixedHeight(h)
 
     def record_tick(self, payload) -> None:
         try:
@@ -150,6 +160,7 @@ class StatusView(QWidget):
             it_l.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.curve_table.setItem(i, 0, it_t)
             self.curve_table.setItem(i, 1, it_l)
+        self._autosize_table(self.curve_table)
 
         self._refresh_rpm_table()
 
@@ -161,6 +172,7 @@ class StatusView(QWidget):
                 item = QTableWidgetItem(val)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.rpm_table.setItem(i, j, item)
+        self._autosize_table(self.rpm_table)
 
     def _get(self, name: str) -> Any:
         try:
