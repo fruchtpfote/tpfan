@@ -1,10 +1,16 @@
 from __future__ import annotations
 import sys
-from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .ipc.dbus_client import make_client
 from .main_window import MainWindow
+from .tray import TrayController
+
+
+def _activate_window(win):
+    win.show()
+    win.raise_()
+    win.activateWindow()
 
 
 def main() -> int:
@@ -15,24 +21,48 @@ def main() -> int:
     win = MainWindow(client)
     win.resize(700, 500)
 
-    icon = QIcon.fromTheme("fan")
-    if icon.isNull():
-        from PyQt6.QtGui import QPixmap, QPainter, QColor
-        from PyQt6.QtCore import Qt
-        pm = QPixmap(32, 32)
-        pm.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pm)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QColor(70, 130, 180))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawEllipse(2, 2, 28, 28)
-        painter.end()
-        icon = QIcon(pm)
-    tray = QSystemTrayIcon(icon)
-    menu = QMenu()
-    menu.addAction("Öffnen").triggered.connect(win.show)
-    menu.addAction("Beenden").triggered.connect(app.quit)
-    tray.setContextMenu(menu)
+    tray = TrayController(app)
+
+    def safe_call(fn, *args):
+        try:
+            fn(*args)
+        except Exception as e:
+            QMessageBox.warning(win, "tpfan", MainWindow._friendly_error(e))
+
+    def on_mode(mode: str):
+        safe_call(client.set_mode, mode)
+        win.modes.set_mode_state(mode)
+        tray.apply_mode(mode)
+
+    def on_level(lvl: str):
+        safe_call(client.set_manual_level, lvl)
+
+    tray.modeRequested.connect(on_mode)
+    tray.levelRequested.connect(on_level)
+    tray.openRequested.connect(lambda: _activate_window(win))
+    tray.quitRequested.connect(app.quit)
+
+    def on_tick(payload):
+        tray.apply_tick(payload)
+        mode = client.get("Mode")
+        if mode:
+            tray.apply_mode(str(mode))
+
+    def on_connected(ok: bool):
+        tray.set_connected(ok)
+        if ok:
+            mode = client.get("Mode")
+            if mode:
+                tray.apply_mode(str(mode))
+
+    def on_props(changed: dict):
+        if "Mode" in changed:
+            tray.apply_mode(str(changed["Mode"]))
+
+    client.tickReceived.connect(on_tick)
+    client.connected.connect(on_connected)
+    client.propertiesChanged.connect(on_props)
+
     tray.show()
     win.show()
 
