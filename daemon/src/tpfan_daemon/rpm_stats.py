@@ -8,6 +8,18 @@ import os
 
 log = logging.getLogger(__name__)
 
+# Bekannte Level-Strings, die wir tracken. Alles andere (unknown, leer,
+# kaputte Kernel-Werte) wird ignoriert, damit die JSON nicht durch
+# unerwartete Keys aufgebläht wird.
+ALLOWED_LEVELS = frozenset(["0", "1", "2", "3", "4", "5", "6", "7",
+                            "auto", "disengaged", "full-speed"])
+
+# Obergrenze für den Sample-Zähler. Verhindert UInt32-Overflow auf dem
+# D-Bus und hält die JSON-Werte klein. Bei einer Sample/Sekunde reichen
+# 10 Mio. für ~116 Tage Dauerbetrieb pro Level — danach wird der Zähler
+# eingefroren, last/min/max bleiben weiterhin aktuell.
+COUNT_CAP = 10_000_000
+
 
 @dataclass
 class RpmStatsTracker:
@@ -24,10 +36,12 @@ class RpmStatsTracker:
     count: dict[str, int] = field(default_factory=dict)
 
     def record(self, level: str, rpm: int) -> None:
-        if not level or rpm < 0:
+        if level not in ALLOWED_LEVELS or rpm < 0:
             return
         self.last[level] = int(rpm)
-        self.count[level] = self.count.get(level, 0) + 1
+        n = self.count.get(level, 0)
+        if n < COUNT_CAP:
+            self.count[level] = n + 1
         if level not in self.minv or rpm < self.minv[level]:
             self.minv[level] = int(rpm)
         if level not in self.maxv or rpm > self.maxv[level]:
@@ -63,11 +77,13 @@ class RpmStatsTracker:
     def from_json(cls, raw: dict) -> "RpmStatsTracker":
         t = cls()
         for lvl, v in (raw.get("levels") or {}).items():
+            if lvl not in ALLOWED_LEVELS:
+                continue
             try:
                 t.last[lvl] = int(v["last"])
                 t.minv[lvl] = int(v["min"])
                 t.maxv[lvl] = int(v["max"])
-                t.count[lvl] = int(v["count"])
+                t.count[lvl] = min(int(v["count"]), COUNT_CAP)
             except (KeyError, TypeError, ValueError):
                 continue
         return t

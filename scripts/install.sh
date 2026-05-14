@@ -183,6 +183,13 @@ remove_config() {
     fi
 }
 
+remove_state() {
+    if [[ -e /var/lib/tpfan ]]; then
+        log "entferne State-Verzeichnis /var/lib/tpfan (RPM-Statistik)"
+        rm -rf /var/lib/tpfan
+    fi
+}
+
 reload_module_without_fan_control() {
     log "lade thinkpad_acpi neu (ohne fan_control=1)"
     if lsmod | grep -q '^thinkpad_acpi'; then
@@ -201,6 +208,7 @@ do_uninstall() {
     uninstall_packaging
     uninstall_python_packages
     remove_config
+    remove_state
     reload_module_without_fan_control
     log "fertig."
 }

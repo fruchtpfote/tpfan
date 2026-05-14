@@ -19,6 +19,40 @@ def test_record_ignores_invalid():
     assert t.as_dict() == {}
 
 
+def test_record_ignores_unknown_level_strings():
+    t = RpmStatsTracker()
+    t.record("garbage", 1000)
+    t.record("8", 2500)        # nicht erlaubt — Levels gehen nur 0..7
+    t.record("unknown", 1500)
+    assert t.as_dict() == {}
+
+
+def test_count_is_capped():
+    from tpfan_daemon.rpm_stats import COUNT_CAP
+    t = RpmStatsTracker()
+    t.count["3"] = COUNT_CAP
+    t.last["3"] = 2000
+    t.minv["3"] = 2000
+    t.maxv["3"] = 2000
+    t.record("3", 2100)
+    # Zähler bleibt am Cap, aber last/min/max werden weiter aktualisiert.
+    assert t.count["3"] == COUNT_CAP
+    assert t.last["3"] == 2100
+    assert t.maxv["3"] == 2100
+
+
+def test_from_json_drops_unknown_levels_and_caps_count():
+    from tpfan_daemon.rpm_stats import COUNT_CAP
+    raw = {"levels": {
+        "3": {"last": 2700, "min": 2600, "max": 2800, "count": COUNT_CAP + 50},
+        "garbage": {"last": 1, "min": 1, "max": 1, "count": 1},
+    }}
+    t = RpmStatsTracker.from_json(raw)
+    d = t.as_dict()
+    assert "garbage" not in d
+    assert d["3"] == (2700, 2600, 2800, COUNT_CAP)
+
+
 def test_reset_clears_all():
     t = RpmStatsTracker()
     t.record("3", 2500)
