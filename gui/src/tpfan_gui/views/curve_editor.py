@@ -187,6 +187,7 @@ def make_widget(model: CurveModel, on_change, parent=None,
             try:
                 self.plot.scene().installEventFilter(self._drag_filter)
                 self.plot.scene().sigMouseClicked.connect(self._on_click)
+                self.plot.scene().sigMouseMoved.connect(self._on_hover)
             except Exception:
                 pass
 
@@ -220,6 +221,20 @@ def make_widget(model: CurveModel, on_change, parent=None,
             except (IndexError, ValueError):
                 return
             self.refresh()
+
+        @staticmethod
+        def _format_point_tooltip(t: float, lvl: int) -> str:
+            return f"{float(t):.1f} °C → Level {int(lvl)}"
+
+        def _on_hover(self, scene_pos):
+            from PyQt6.QtWidgets import QToolTip
+            from PyQt6.QtGui import QCursor
+            idx = self._hit_test(scene_pos)
+            if idx is None:
+                return
+            t, lvl = model.points[idx]
+            QToolTip.showText(QCursor.pos(),
+                              self._format_point_tooltip(t, lvl), self.plot)
 
         def _on_click(self, ev):
             if self._dragging:

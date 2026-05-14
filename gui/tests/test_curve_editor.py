@@ -194,6 +194,15 @@ def test_save_as_rejects_builtin_collision(qtbot, monkeypatch):
     assert warned
 
 
+def test_hover_tooltip_text_format(qtbot):
+    from tpfan_gui.views.curve_editor import CurveModel, make_widget
+    model = CurveModel(points=[(45.0, 0), (80.0, 7)])
+    w = make_widget(model, on_change=lambda pts: None)
+    qtbot.addWidget(w)
+    assert w._format_point_tooltip(45.0, 0) == "45.0 °C → Level 0"
+    assert w._format_point_tooltip(72.5, 5) == "72.5 °C → Level 5"
+
+
 def test_user_preset_delete_button_invokes_callback(qtbot, monkeypatch):
     from tpfan_gui.views.curve_editor import CurveModel, make_widget
     from PyQt6 import QtWidgets
