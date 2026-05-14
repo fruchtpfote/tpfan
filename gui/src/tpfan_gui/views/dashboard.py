@@ -9,6 +9,7 @@ class Dashboard(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._labels: dict[str, QLabel] = {}
+        self._max: dict[str, float] = {}
         grid = QGridLayout(self)
         for row, name in enumerate(self.SENSOR_ORDER):
             grid.addWidget(QLabel(name + ":"), row, 0)
@@ -28,7 +29,11 @@ class Dashboard(QWidget):
     def apply_tick(self, p: TickPayload) -> None:
         for name, lbl in self._labels.items():
             v = p.temps.get(name)
-            lbl.setText(f"{v:.1f} °C" if v is not None else "--")
+            if v is None:
+                lbl.setText("--")
+                continue
+            self._max[name] = max(self._max.get(name, v), v)
+            lbl.setText(f"{v:.1f} °C  (max {self._max[name]:.1f} °C)")
         self.fan1_label.setText(f"{p.fans[0][0]} ({p.fans[0][1]})" if len(p.fans) >= 1 else "--")
         self.fan2_label.setText(f"{p.fans[1][0]} ({p.fans[1][1]})" if len(p.fans) >= 2 else "--")
         self.level_label.setText(p.level)
