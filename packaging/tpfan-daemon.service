@@ -17,18 +17,23 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
-ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-ReadWritePaths=/etc/tpfan /var/lib/tpfan /proc/acpi/ibm/fan
+ConfigurationDirectory=tpfan
+StateDirectory=tpfan
 RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
+# Hinweise:
+# - ProtectKernelTunables NICHT setzen: würde /proc/acpi/ibm/fan read-only machen.
+# - /proc liegt außerhalb ProtectSystem=strict (read-only-Zone /usr,/boot,/etc),
+#   daher ist /proc/acpi/ibm/fan ohne explizite ReadWritePaths beschreibbar.
+# - MemoryDenyWriteExecute weggelassen, weil Python-/PyGObject-Code via ctypes/JIT
+#   gelegentlich W+X-Mappings braucht.
 
 [Install]
 WantedBy=multi-user.target
