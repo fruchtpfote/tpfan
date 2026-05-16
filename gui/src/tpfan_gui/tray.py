@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QObject, pyqtSignal
-from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QAction, QActionGroup, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .ipc.dbus_client import TickPayload
@@ -25,7 +25,7 @@ def color_for_level(level: str) -> QColor:
     return LEVEL_COLOR_GRAY
 
 
-def make_level_icon(level: str, size: int = 32) -> QIcon:
+def make_level_icon(level: str, size: int = 64, temp: Optional[float] = None) -> QIcon:
     pm = QPixmap(size, size)
     pm.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pm)
@@ -34,6 +34,14 @@ def make_level_icon(level: str, size: int = 32) -> QIcon:
     painter.setPen(QColor(255, 255, 255))
     margin = max(2, size // 16)
     painter.drawEllipse(margin, margin, size - 2 * margin, size - 2 * margin)
+    if temp is not None:
+        text = f"{int(round(temp))}"
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(max(10, int(size * 0.55)))
+        painter.setFont(font)
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, text)
     painter.end()
     return QIcon(pm)
 
@@ -103,7 +111,10 @@ class TrayController(QObject):
         self.apply_mode(self._mode)
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
             self.openRequested.emit()
 
     def show(self) -> None:
@@ -129,11 +140,12 @@ class TrayController(QObject):
 
     def apply_tick(self, p: TickPayload) -> None:
         self._last_payload = p
-        self.tray.setIcon(make_level_icon(p.level))
         if p.temps:
             name, val = max(p.temps.items(), key=lambda kv: kv[1])
+            self.tray.setIcon(make_level_icon(p.level, temp=val))
             self._max_action.setText(f"Max: {name} {val:.1f} °C")
         else:
+            self.tray.setIcon(make_level_icon(p.level))
             self._max_action.setText("Max: —")
         rpm = p.fans[0][0] if p.fans else None
         if rpm is not None:

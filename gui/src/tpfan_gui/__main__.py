@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import sys
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -9,8 +10,12 @@ from .main_window import MainWindow
 from .tray import TrayController
 
 
-def _activate_window(win):
+def _toggle_window(win):
+    if win.isVisible() and not win.isMinimized() and win.isActiveWindow():
+        win.hide()
+        return
     win.show()
+    win.setWindowState(win.windowState() & ~Qt.WindowState.WindowMinimized)
     win.raise_()
     win.activateWindow()
 
@@ -55,7 +60,7 @@ def main() -> int:
 
     tray.modeRequested.connect(on_mode)
     tray.levelRequested.connect(on_level)
-    tray.openRequested.connect(lambda: _activate_window(win))
+    tray.openRequested.connect(lambda: _toggle_window(win))
     tray.quitRequested.connect(app.quit)
 
     def _sync_mode_and_curve():
