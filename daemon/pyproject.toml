@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tpfan-daemon"
-version = "0.2.0"
+version = "0.2.1"
 description = "ThinkPad fan control daemon"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
