@@ -77,17 +77,6 @@ Umgebungsvariablen für den Installer:
     journalctl -u tpfan-daemon -f         # Daemon-Logs
     TPFAN_LOG=debug tpfan-gui             # GUI mit Debug-Ausgabe
 
-## Entwicklung
-
-    make dev           # editable installs in .venv
-    make test          # alle Unit-Tests
-    make test-daemon   # nur Daemon
-    make test-gui      # nur GUI
-
-Architektur und API: `docs/superpowers/specs/2026-05-10-tpfan-design.md`.
-Implementierungsplan: `docs/superpowers/plans/2026-05-13-tpfan-implementation.md`.
-Manueller End-to-End-Test: `docs/manual-test.md`.
-
 ## Entstehung
 
 tpfan wurde mit [Claude Code](https://www.claude.com/product/claude-code)
