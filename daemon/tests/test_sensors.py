@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from pathlib import Path
 import pytest
 from tpfan_daemon.hw.sensors import Sensors
@@ -62,6 +63,42 @@ def test_coretemp_maps_to_cpu(hwmon_tree: Path):
     # Cores fallen auf generischen Namen zurück, damit sie nicht verloren gehen.
     assert r["coretemp-Core 0"] == pytest.approx(51.0)
     assert r["coretemp-Core 1"] == pytest.approx(50.0)
+
+
+def test_unreadable_sensor_warns_only_once(hwmon_tree: Path, caplog):
+    # Ein Sensor, der bei jedem Tick unlesbar ist (z. B. thinkpad-Slot mit
+    # ENXIO), darf das Journal nicht fluten: nur eine Warnung, nicht pro Aufruf.
+    d = make_hwmon(hwmon_tree, 0, "k10temp", temps={"temp1": 45.0}, labels={"temp1": "Tctl"})
+    (d / "temp2_input").write_text("40000\n")  # bei discover lesbar
+    s = Sensors(root=hwmon_tree); s.discover()
+    (d / "temp2_input").unlink()  # danach unlesbar -> OSError bei read
+
+    with caplog.at_level(logging.WARNING, logger="tpfan_daemon.hw.sensors"):
+        for _ in range(5):
+            s.read_all()
+
+    warnings = [r for r in caplog.records if "unreadable" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_unreadable_sensor_warns_again_after_recovery(hwmon_tree: Path, caplog):
+    # Erholt sich ein Sensor und fällt später erneut aus, soll wieder gewarnt
+    # werden (die Idempotenz gilt nur pro ununterbrochener Ausfallphase).
+    d = make_hwmon(hwmon_tree, 0, "k10temp", temps={"temp1": 45.0}, labels={"temp1": "Tctl"})
+    input_path = d / "temp2_input"
+    input_path.write_text("40000\n")
+    s = Sensors(root=hwmon_tree); s.discover()
+
+    with caplog.at_level(logging.WARNING, logger="tpfan_daemon.hw.sensors"):
+        input_path.unlink()
+        s.read_all(); s.read_all()          # 1. Warnung
+        input_path.write_text("41000\n")
+        s.read_all()                        # Erholung -> Reset
+        input_path.unlink()
+        s.read_all()                        # 2. Warnung
+
+    warnings = [r for r in caplog.records if "unreadable" in r.getMessage()]
+    assert len(warnings) == 2
 
 
 def test_thinkpad_generic_zone_indexed(hwmon_tree: Path):

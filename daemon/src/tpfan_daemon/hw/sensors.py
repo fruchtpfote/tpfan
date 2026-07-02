@@ -36,9 +36,13 @@ class SensorRef:
 class Sensors:
     root: Path = Path("/sys/class/hwmon")
     refs: list[SensorRef] = field(default_factory=list)
+    # Sensornamen, für die bereits eine 'unreadable'-Warnung geloggt wurde;
+    # verhindert Journal-Flooding bei dauerhaft unlesbaren Slots (z. B. ENXIO).
+    _warned: set[str] = field(default_factory=set, repr=False)
 
     def discover(self) -> None:
         self.refs = []
+        self._warned.clear()
         taken: set[str] = set()
         for d in sorted(self.root.iterdir()):
             if not d.is_dir():
@@ -98,8 +102,11 @@ class Sensors:
             try:
                 raw = r.path.read_text().strip()
                 out[r.name] = int(raw) / 1000.0
+                self._warned.discard(r.name)
             except (OSError, ValueError) as e:
-                log.warning("sensor %s unreadable: %s", r.name, e)
+                if r.name not in self._warned:
+                    log.warning("sensor %s unreadable: %s", r.name, e)
+                    self._warned.add(r.name)
         return out
 
     def describe(self) -> dict[str, tuple[float, str, str]]:
