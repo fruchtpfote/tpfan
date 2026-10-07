@@ -220,14 +220,143 @@ def test_service_exposes_properties_and_methods(session_bus):
         line = proc.stdout.readline()
         assert b"READY" in line, f"server failed to start: {line!r} stderr={proc.stderr.read()!r}"
 
-        from dasbus.connection import SessionMessageBus
+        from dasbus.connection import AddressedMessageBus
         from tpfan_daemon.ipc.dbus_service import BUS_NAME, OBJECT_PATH
-        client_bus = SessionMessageBus()
+        client_bus = AddressedMessageBus(session_bus)
         proxy = client_bus.get_proxy(BUS_NAME, OBJECT_PATH)
         assert proxy.Mode == "auto"
         assert proxy.CurrentLevel == "auto"
         assert "CPU" in proxy.Sensors
         assert proxy.DaemonVersion
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def test_set_mode_emits_properties_changed(session_bus):
+    """Die GUI hält Mode/Curve über PropertiesChanged aktuell statt zu pollen.
+
+    Ohne dieses Signal müsste sie die Properties sekündlich lesen, und jeder
+    Property-Read kostet den Daemon einen kompletten Sensor-Sweep.
+    """
+    import sys, textwrap, time
+    code = textwrap.dedent(f"""
+        import sys, os
+        sys.path.insert(0, {repr(os.path.join(os.path.dirname(__file__), '..', 'src'))})
+        from dasbus.connection import SessionMessageBus
+        from dasbus.loop import EventLoop
+        from tpfan_daemon.ipc.dbus_service import TpfanService, BUS_NAME, OBJECT_PATH
+        from tpfan_daemon.config import DEFAULT
+
+        state = {{"mode": "auto", "level": "auto", "curve": DEFAULT.curve,
+                  "curve_sensors": list(DEFAULT.curve.sensors)}}
+
+        def handler(cmd, *args):
+            if cmd == "set_mode":
+                state["mode"] = args[0]
+
+        svc = TpfanService(state_getter=lambda: state, command_handler=handler)
+        bus = SessionMessageBus()
+        bus.publish_object(OBJECT_PATH, svc)
+        bus.register_service(BUS_NAME)
+        print("READY", flush=True)
+        EventLoop().run()
+    """)
+    proc = subprocess.Popen([sys.executable, "-c", code],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env={**os.environ})
+    try:
+        line = proc.stdout.readline()
+        assert b"READY" in line, f"server failed to start: {line!r} stderr={proc.stderr.read()!r}"
+
+        from gi.repository import GLib
+        from dasbus.connection import AddressedMessageBus
+        from tpfan_daemon.ipc.dbus_service import BUS_NAME, OBJECT_PATH, IFACE
+        client_bus = AddressedMessageBus(session_bus)
+        proxy = client_bus.get_proxy(BUS_NAME, OBJECT_PATH)
+
+        seen: list[tuple[str, dict]] = []
+        proxy.PropertiesChanged.connect(
+            lambda iface, changed, invalid: seen.append((iface, dict(changed))))
+
+        proxy.SetMode("curve")
+
+        ctx = GLib.MainContext.default()
+        deadline = time.monotonic() + 5.0
+        while not seen and time.monotonic() < deadline:
+            ctx.iteration(False)
+            time.sleep(0.01)
+
+        assert seen, "kein PropertiesChanged empfangen"
+        iface, changed = seen[0]
+        assert iface == IFACE
+        assert changed["Mode"].get_string() == "curve"
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def test_set_curve_reports_curve_and_sensors(session_bus):
+    import sys, textwrap, time
+    code = textwrap.dedent(f"""
+        import sys, os
+        sys.path.insert(0, {repr(os.path.join(os.path.dirname(__file__), '..', 'src'))})
+        from dasbus.connection import SessionMessageBus
+        from dasbus.loop import EventLoop
+        from tpfan_daemon.ipc.dbus_service import TpfanService, BUS_NAME, OBJECT_PATH
+        from tpfan_daemon.config import CurveCfg, DEFAULT
+
+        state = {{"mode": "curve", "curve": DEFAULT.curve,
+                  "curve_sensors": list(DEFAULT.curve.sensors)}}
+
+        def handler(cmd, *args):
+            if cmd == "set_curve":
+                points, sensors = args
+                state["curve"] = CurveCfg(sensors=tuple(sensors), points=tuple(points))
+                state["curve_sensors"] = list(sensors)
+
+        svc = TpfanService(state_getter=lambda: state, command_handler=handler)
+        bus = SessionMessageBus()
+        bus.publish_object(OBJECT_PATH, svc)
+        bus.register_service(BUS_NAME)
+        print("READY", flush=True)
+        EventLoop().run()
+    """)
+    proc = subprocess.Popen([sys.executable, "-c", code],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env={**os.environ})
+    try:
+        line = proc.stdout.readline()
+        assert b"READY" in line, f"server failed to start: {line!r} stderr={proc.stderr.read()!r}"
+
+        from gi.repository import GLib
+        from dasbus.connection import AddressedMessageBus
+        from tpfan_daemon.ipc.dbus_service import BUS_NAME, OBJECT_PATH
+        client_bus = AddressedMessageBus(session_bus)
+        proxy = client_bus.get_proxy(BUS_NAME, OBJECT_PATH)
+
+        seen: list[dict] = []
+        proxy.PropertiesChanged.connect(
+            lambda iface, changed, invalid: seen.append(dict(changed)))
+
+        proxy.SetCurve([(45.0, 1), (85.0, 7)], ["CPU"])
+
+        ctx = GLib.MainContext.default()
+        deadline = time.monotonic() + 5.0
+        while not seen and time.monotonic() < deadline:
+            ctx.iteration(False)
+            time.sleep(0.01)
+
+        assert seen, "kein PropertiesChanged empfangen"
+        changed = seen[0]
+        assert set(changed) == {"Curve", "CurveSensors"}
+        assert changed["CurveSensors"].unpack() == ["CPU"]
     finally:
         proc.send_signal(signal.SIGTERM)
         try:

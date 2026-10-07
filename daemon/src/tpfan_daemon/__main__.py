@@ -1,6 +1,8 @@
 from __future__ import annotations
 import logging, os, signal, sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Callable
 
 from gi.repository import GLib
 from dasbus.connection import SystemMessageBus
@@ -114,24 +116,63 @@ def main() -> int:
     return 0
 
 
-def _state_dict(d: Daemon, sensors: Sensors, rpm_stats: RpmStatsTracker) -> dict:
-    # describe() liest schon alle Sensoren frisch; temps daraus ableiten statt
-    # mit read_all() ein zweites Mal über den I2C-/ACPI-Bus zu gehen.
-    desc = sensors.describe()
-    return {
-        "mode": d.loop.config.mode,
-        "level": d.loop.last_level,
-        "temps": {name: val for name, (val, _, _) in desc.items()},
-        "sensor_describe": desc,
-        "fans": [],
-        "curve": d.loop.config.curve,
-        "curve_sensors": list(d.loop.config.curve.sensors),
-        "failsafe_temp": d.loop.config.failsafe_temp,
-        "rpm_stats": rpm_stats.as_dict(),
-        "rpm_stats_enabled": d.loop.config.rpm_stats_enabled,
-        "user_presets": d.loop.config.user_presets,
-        "boot_grace_remaining": d.loop.boot_grace_remaining(),
-    }
+class _LazyState(Mapping):
+    """State-Mapping, das teure Werte erst beim Zugriff berechnet.
+
+    Properties wie Mode oder Curve brauchen keine Sensordaten. Wertete man den
+    State eifrig aus, löste jeder dieser Property-Reads einen kompletten
+    Sensor-Sweep über I2C/ACPI aus — bei einem sekündlich pollenden Client
+    war das die Hälfte der Idle-CPU-Last des Daemons.
+    """
+
+    def __init__(self, eager: dict, lazy: dict[str, Callable[[], object]]):
+        self._eager = eager
+        self._lazy = lazy
+
+    def __getitem__(self, key):
+        if key in self._eager:
+            return self._eager[key]
+        if key in self._lazy:
+            return self._lazy[key]()
+        raise KeyError(key)
+
+    def __iter__(self):
+        yield from self._eager
+        yield from self._lazy
+
+    def __len__(self) -> int:
+        return len(self._eager) + len(self._lazy)
+
+
+def _state_dict(d: Daemon, sensors: Sensors, rpm_stats: RpmStatsTracker) -> Mapping:
+    # describe() liefert Wert, Label und Quelle in einem Durchgang; temps wird
+    # daraus abgeleitet, statt mit read_all() ein zweites Mal über den Bus zu
+    # gehen. Pro State-Instanz wird höchstens einmal gelesen.
+    cached: dict[str, dict] = {}
+
+    def describe() -> dict:
+        if "desc" not in cached:
+            cached["desc"] = sensors.describe()
+        return cached["desc"]
+
+    return _LazyState(
+        eager={
+            "mode": d.loop.config.mode,
+            "level": d.loop.last_level,
+            "fans": [],
+            "curve": d.loop.config.curve,
+            "curve_sensors": list(d.loop.config.curve.sensors),
+            "failsafe_temp": d.loop.config.failsafe_temp,
+            "rpm_stats": rpm_stats.as_dict(),
+            "rpm_stats_enabled": d.loop.config.rpm_stats_enabled,
+            "user_presets": d.loop.config.user_presets,
+            "boot_grace_remaining": d.loop.boot_grace_remaining(),
+        },
+        lazy={
+            "sensor_describe": describe,
+            "temps": lambda: {name: val for name, (val, _, _) in describe().items()},
+        },
+    )
 
 
 def _lvl_to_int(lvl: str) -> int:

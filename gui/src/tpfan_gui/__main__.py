@@ -1,13 +1,53 @@
 from __future__ import annotations
 import argparse
 import sys
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .ipc.dbus_client import make_client
 from .main_window import MainWindow
 from .tray import TrayController
+
+# Netz für verpasste PropertiesChanged-Signale (z. B. nach einem
+# Daemon-Neustart). Bewusst träge: jeder Property-Read kostet den Daemon
+# einen Sensor-Sweep über I2C/ACPI.
+RESYNC_INTERVAL_MS = 30_000
+
+
+class TraySync:
+    """Hält Mode und Curve im Tray mit dem Daemon synchron.
+
+    Liest die Properties NICHT im Tick-Takt: Mode und Curve ändern sich nur
+    durch Kommandos, und die meldet der Daemon per PropertiesChanged. Ein
+    sekündlicher Read kostete ihn dagegen zwei komplette Sensor-Sweeps und
+    damit die Hälfte seiner Idle-CPU-Last.
+    """
+
+    def __init__(self, client, tray):
+        self._client = client
+        self._tray = tray
+
+    def resync(self) -> None:
+        mode = self._client.get("Mode")
+        if mode:
+            self._tray.apply_mode(str(mode))
+        try:
+            self._tray.apply_curve(self._client.get("Curve") or [])
+        except Exception:
+            self._tray.apply_curve([])
+
+    def on_tick(self, payload) -> None:
+        self._tray.apply_tick(payload)
+
+    def on_connected(self, ok: bool) -> None:
+        self._tray.set_connected(ok)
+        if ok:
+            self.resync()
+
+    def on_props(self, changed: dict) -> None:
+        if "Mode" in changed or "Curve" in changed:
+            self.resync()
 
 
 def _toggle_window(win):
@@ -64,31 +104,15 @@ def main() -> int:
     tray.openRequested.connect(lambda: _toggle_window(win))
     tray.quitRequested.connect(app.quit)
 
-    def _sync_mode_and_curve():
-        mode = client.get("Mode")
-        if mode:
-            tray.apply_mode(str(mode))
-        try:
-            tray.apply_curve(client.get("Curve") or [])
-        except Exception:
-            tray.apply_curve([])
+    sync = TraySync(client, tray)
+    client.tickReceived.connect(sync.on_tick)
+    client.connected.connect(sync.on_connected)
+    client.propertiesChanged.connect(sync.on_props)
 
-    def on_tick(payload):
-        tray.apply_tick(payload)
-        _sync_mode_and_curve()
-
-    def on_connected(ok: bool):
-        tray.set_connected(ok)
-        if ok:
-            _sync_mode_and_curve()
-
-    def on_props(changed: dict):
-        if "Mode" in changed or "Curve" in changed:
-            _sync_mode_and_curve()
-
-    client.tickReceived.connect(on_tick)
-    client.connected.connect(on_connected)
-    client.propertiesChanged.connect(on_props)
+    resync_timer = QTimer(app)
+    resync_timer.setInterval(RESYNC_INTERVAL_MS)
+    resync_timer.timeout.connect(sync.resync)
+    resync_timer.start()
 
     tray.show()
     if not args.tray:
