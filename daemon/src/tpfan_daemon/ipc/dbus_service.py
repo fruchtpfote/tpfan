@@ -52,11 +52,13 @@ class TpfanService:
     # --- Properties ---
     @property
     def Sensors(self) -> Dict[Str, Tuple[Double, Str, Str]]:
+        # Ein einziger _state()-Aufruf: jeder liest die Hardware-Sensoren neu.
+        state = self._state()
         out = {}
-        for name, (val, label, source) in self._state().get("sensor_describe", {}).items():
+        for name, (val, label, source) in state.get("sensor_describe", {}).items():
             out[name] = (val, label, source)
         if not out:
-            for name, val in self._state().get("temps", {}).items():
+            for name, val in state.get("temps", {}).items():
                 out[name] = (val, name, name)
         return out
 

@@ -91,14 +91,15 @@ def main() -> int:
 
     def tick():
         try:
+            # tr.fan_speed stammt aus dem fan.read() in loop.tick() — kein
+            # zweiter Read von /proc/acpi/ibm/fan pro Sekunde.
             tr = daemon.loop.tick()
-            fan_state = fan.read()
-            fans_payload = [(fan_state.speed_rpm, _lvl_to_int(tr.target_level))]
+            fans_payload = [(tr.fan_speed, _lvl_to_int(tr.target_level))]
             service.Tick(tr.temps, fans_payload, tr.target_level)
             if tr.emergency:
                 service.EmergencyTriggered(tr.emergency[0], tr.emergency[1])
-            if daemon.loop.config.rpm_stats_enabled:
-                rpm_stats.record(tr.target_level, int(fan_state.speed_rpm))
+            if daemon.loop.config.rpm_stats_enabled and not tr.fallback_to_auto:
+                rpm_stats.record(tr.target_level, int(tr.fan_speed))
                 tick_counter[0] += 1
                 if tick_counter[0] % RPM_STATS_SAVE_EVERY == 0:
                     save_stats(RPM_STATS_PATH, rpm_stats)
@@ -114,11 +115,14 @@ def main() -> int:
 
 
 def _state_dict(d: Daemon, sensors: Sensors, rpm_stats: RpmStatsTracker) -> dict:
+    # describe() liest schon alle Sensoren frisch; temps daraus ableiten statt
+    # mit read_all() ein zweites Mal über den I2C-/ACPI-Bus zu gehen.
+    desc = sensors.describe()
     return {
         "mode": d.loop.config.mode,
         "level": d.loop.last_level,
-        "temps": sensors.read_all(),
-        "sensor_describe": sensors.describe(),
+        "temps": {name: val for name, (val, _, _) in desc.items()},
+        "sensor_describe": desc,
         "fans": [],
         "curve": d.loop.config.curve,
         "curve_sensors": list(d.loop.config.curve.sensors),

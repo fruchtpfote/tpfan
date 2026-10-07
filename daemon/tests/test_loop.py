@@ -8,10 +8,14 @@ class FakeSensors:
     def __init__(self, temps):
         self.temps = temps
         self.fail_read: bool = False
+        self.required: tuple[str, ...] = ()
     def read_all(self):
         if self.fail_read:
             raise OSError("sensors unavailable")
         return dict(self.temps)
+    def read_for_control(self, required=()):
+        self.required = tuple(required)
+        return self.read_all()
 
 
 class FakeFan:
@@ -209,3 +213,16 @@ def test_fan_read_failure_falls_back_to_auto():
     tr = loop.tick()
     assert tr.fallback_to_auto is True
     assert tr.target_level == "auto"
+
+
+def test_curve_sensors_are_requested_as_required():
+    cfg = Config(mode="curve", curve=CurveCfg(("CPU", "NVMe"), ((40.0, 0), (80.0, 7))))
+    loop, _ = _loop({"CPU": 50.0, "NVMe": 45.0}, cfg=cfg)
+    loop.tick()
+    assert loop.sensors.required == ("CPU", "NVMe")
+
+
+def test_non_curve_modes_require_no_sensor():
+    loop, _ = _loop({"CPU": 50.0}, cfg=Config(mode="auto"))
+    loop.tick()
+    assert tuple(loop.sensors.required) == ()

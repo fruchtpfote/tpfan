@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Callable, Iterable, Protocol
 import logging
 import time
 
@@ -13,7 +13,7 @@ BOOT_GRACE_SECONDS = 30.0
 
 
 class SensorsLike(Protocol):
-    def read_all(self) -> dict[str, float]: ...
+    def read_for_control(self, required: Iterable[str] = ()) -> dict[str, float]: ...
 
 
 class FanLike(Protocol):
@@ -75,8 +75,11 @@ class ControlLoop:
             pass
 
     def tick(self) -> TickResult:
+        curve = self._active_curve()
         try:
-            temps = self.sensors.read_all()
+            # Die Sensoren der aktiven Kurve müssen frisch sein, der Rest darf
+            # aus dem Cache kommen — siehe Sensors.read_for_control().
+            temps = self.sensors.read_for_control(curve.sensors if curve else ())
         except OSError as e:
             log.error("sensor read failed: %s — falling back to auto", e)
             self._try_set_auto()
@@ -142,7 +145,6 @@ class ControlLoop:
         elif m == "manual":
             target = self.config.manual_level
         else:
-            curve = self._active_curve()
             if curve is None:
                 target = "auto"
             else:

@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 import pytest
-from tpfan_daemon.hw.sensors import Sensors
+from tpfan_daemon.hw.sensors import CALIBRATION_SAMPLES, Sensors
 from .conftest import make_hwmon
 
 
@@ -109,3 +109,122 @@ def test_thinkpad_generic_zone_indexed(hwmon_tree: Path):
     r = s.read_all()
     assert r["MB-temp3"] == pytest.approx(40.0)
     assert r["MB-temp4"] == pytest.approx(41.0)
+
+
+# --- Zwei-Tier-Polling -------------------------------------------------
+
+def _scripted_timer(costs: list[float], samples: int):
+    """Timer-Stub: liefert Zeitstempel, bei denen Sensor k `costs[k]` kostet.
+
+    Reihenfolge wie die Kalibrierung: `samples` Sweeps über alle Sensoren,
+    pro Read zwei Timer-Aufrufe (vorher/nachher).
+    """
+    vals: list[float] = []
+    t = 0.0
+    for _ in range(samples):
+        for cost in costs:
+            vals.append(t)
+            t += cost
+            vals.append(t)
+            t += 0.001
+    it = iter(vals)
+    return lambda: next(it)
+
+
+class _FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _two_sensors(root: Path) -> None:
+    make_hwmon(root, 0, "k10temp", temps={"temp1": 45.0}, labels={"temp1": "Tctl"})
+    make_hwmon(root, 1, "nvme", temps={"temp1": 38.0}, labels={"temp1": "Composite"})
+
+
+def test_calibration_marks_slow_drivers(hwmon_tree: Path):
+    _two_sensors(hwmon_tree)
+    s = Sensors(root=hwmon_tree,
+                timer=_scripted_timer([0.0, 0.002], CALIBRATION_SAMPLES))
+    s.discover()
+
+    assert s.slow == {"NVMe"}
+
+
+def test_calibration_does_not_swallow_the_first_unreadable_warning(hwmon_tree: Path, caplog):
+    d = make_hwmon(hwmon_tree, 0, "k10temp", temps={"temp1": 45.0}, labels={"temp1": "Tctl"})
+    (d / "temp2_input").write_text("garbage\n")
+    s = Sensors(root=hwmon_tree)
+
+    with caplog.at_level(logging.WARNING, logger="tpfan_daemon.hw.sensors"):
+        s.discover()
+        s.read_all()
+
+    assert [r for r in caplog.records if "unreadable" in r.getMessage()]
+
+
+def test_slow_sensors_are_served_from_cache_between_polls(hwmon_tree: Path):
+    _two_sensors(hwmon_tree)
+    clock = _FakeClock()
+    s = Sensors(root=hwmon_tree, clock=clock, slow_poll_interval_s=5.0)
+    s.discover()
+    s.slow = {"NVMe"}
+
+    first = s.read_for_control()
+    assert first["NVMe"] == pytest.approx(38.0)
+
+    (hwmon_tree / "hwmon0" / "temp1_input").write_text("60000\n")
+    (hwmon_tree / "hwmon1" / "temp1_input").write_text("70000\n")
+
+    clock.now = 1.0
+    r = s.read_for_control()
+    assert r["CPU"] == pytest.approx(60.0)    # schnell -> frisch
+    assert r["NVMe"] == pytest.approx(38.0)   # langsam -> gecacht
+
+    clock.now = 6.0
+    r = s.read_for_control()
+    assert r["NVMe"] == pytest.approx(70.0)   # Intervall abgelaufen -> frisch
+
+
+def test_required_sensors_are_read_fresh_even_when_slow(hwmon_tree: Path):
+    _two_sensors(hwmon_tree)
+    clock = _FakeClock()
+    s = Sensors(root=hwmon_tree, clock=clock, slow_poll_interval_s=5.0)
+    s.discover()
+    s.slow = {"NVMe"}
+    s.read_for_control()
+
+    (hwmon_tree / "hwmon1" / "temp1_input").write_text("70000\n")
+    clock.now = 1.0
+
+    assert s.read_for_control(("NVMe",))["NVMe"] == pytest.approx(70.0)
+
+
+def test_read_for_control_drops_sensor_that_became_unreadable(hwmon_tree: Path):
+    _two_sensors(hwmon_tree)
+    clock = _FakeClock()
+    s = Sensors(root=hwmon_tree, clock=clock, slow_poll_interval_s=5.0)
+    s.discover()
+    s.slow = {"NVMe"}
+    s.read_for_control()
+
+    (hwmon_tree / "hwmon1" / "temp1_input").unlink()
+    clock.now = 6.0
+
+    assert "NVMe" not in s.read_for_control()
+
+
+def test_read_all_bypasses_the_cache(hwmon_tree: Path):
+    _two_sensors(hwmon_tree)
+    clock = _FakeClock()
+    s = Sensors(root=hwmon_tree, clock=clock, slow_poll_interval_s=5.0)
+    s.discover()
+    s.slow = {"NVMe"}
+    s.read_for_control()
+
+    (hwmon_tree / "hwmon1" / "temp1_input").write_text("70000\n")
+    clock.now = 1.0
+
+    assert s.read_all()["NVMe"] == pytest.approx(70.0)

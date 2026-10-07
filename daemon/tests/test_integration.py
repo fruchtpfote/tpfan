@@ -12,6 +12,8 @@ class DriveSensors:
         r = self.schedule[min(self.i, len(self.schedule) - 1)]
         self.i += 1
         return dict(r)
+    def read_for_control(self, required=()):
+        return self.read_all()
     def describe(self):
         return {}
 
